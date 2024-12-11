@@ -11,10 +11,22 @@ export const config = {
 
 export default async function handler(req, res) {
   if (req.method == "POST") {
-    const chatId = req.body.message.chat.id;
-    const text = req.body.message.text.toLowerCase(); // Convert input to lowercase
+    const message = req.body.message;
+    const chatId = message.chat.id;
+    const text = message.text?.toLowerCase(); // Convert input to lowercase
+
     console.log("ChatID", chatId);
     console.log("text", text);
+
+    // Check if it's a group message
+    if (message.chat.type === "group" || message.chat.type === "supergroup") {
+      console.log("Message received from a group.");
+    }
+
+    if (!text) {
+      res.status(200).send("No text found in the message.");
+      return;
+    }
 
     if (text.startsWith("/start") || text.startsWith("/help")) {
       await helpCommand(chatId);
@@ -34,6 +46,7 @@ export default async function handler(req, res) {
         await sendMessage(chatId, text); // Echo the text back for other inputs
       }
     }
+
     res.status(200).send("OK");
   } else {
     res.setHeader("Allow", ["POST"]);

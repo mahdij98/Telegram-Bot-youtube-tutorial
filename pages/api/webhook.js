@@ -19,15 +19,16 @@ export default async function handler(req, res) {
     console.log("text", text);
 
     // Check if it's a group message
-    if (message.chat.type === "group" || message.chat.type === "supergroup") {
-      console.log("Message received from a group.");
-    }
-
     if (!text) {
       res.status(200).send("No text found in the message.");
       return;
     }
 
+    if (message.chat.type === "group" || message.chat.type === "supergroup") {
+      console.log("Message received from a group.");
+    }
+
+    // Respond only to specific commands or patterns
     if (text.startsWith("/start") || text.startsWith("/help")) {
       await helpCommand(chatId);
     } else if (text.startsWith("/ping")) {
@@ -42,9 +43,8 @@ export default async function handler(req, res) {
         const incrementedNumber = number + 1; // Increment the number
         const responseText = `test${incrementedNumber}`;
         await sendMessage(chatId, responseText); // Send the response
-      } else {
-        await sendMessage(chatId, text); // Echo the text back for other inputs
       }
+      // Do nothing for other inputs
     }
 
     res.status(200).send("OK");

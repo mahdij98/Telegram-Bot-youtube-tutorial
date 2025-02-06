@@ -1,55 +1,56 @@
-// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
-
-import { cricketCommand } from "@/utils/commands/cricket";
-import { helpCommand } from "@/utils/commands/help";
-import { pingCommand } from "@/utils/commands/ping";
 import { sendMessage } from "@/utils/telegram";
 
 export const config = {
   maxDuration: 60,
 };
 
+const lotterySessions = {}; // Store lottery data for each chat
+
 export default async function handler(req, res) {
-  if (req.method == "POST") {
-    const message = req.body.message;
-    const chatId = message.chat.id;
-    const text = message.text?.toLowerCase(); // Convert input to lowercase
-
-    console.log("ChatID", chatId);
-    console.log("text", text);
-
-    // Check if it's a group message
-    if (!text) {
-      res.status(200).send("No text found in the message.");
-      return;
-    }
-
-    if (message.chat.type === "group" || message.chat.type === "supergroup") {
-      console.log("Message received from a group.");
-    }
-
-    // Respond only to specific commands or patterns
-    if (text.startsWith("/start") || text.startsWith("/help")) {
-      await helpCommand(chatId);
-    } else if (text.startsWith("/ping")) {
-      await pingCommand(chatId);
-    } else if (text.startsWith("/cricket")) {
-      await cricketCommand(chatId);
-    } else {
-      // Custom handling for "test" followed by a number
-      const match = text.match(/^test(\d+)$/);
-      if (match) {
-        const number = parseInt(match[1], 10); // Extract the number
-        const incrementedNumber = number + 1; // Increment the number
-        const responseText = `test${incrementedNumber}`;
-        await sendMessage(chatId, responseText); // Send the response
-      }
-      // Do nothing for other inputs
-    }
-
-    res.status(200).send("OK");
-  } else {
+  if (req.method !== "POST") {
     res.setHeader("Allow", ["POST"]);
-    res.status(500).send("Method Not Allowed");
+    return res.status(405).send("Method Not Allowed");
   }
+
+  const message = req.body.message;
+  const chatId = message.chat.id;
+  const text = message.text?.toLowerCase();
+
+  if (!text) return res.status(200).send("No text found in the message.");
+
+  if (text.startsWith("/lottery")) {
+    await sendMessage(chatId, "Enter the number of participants:");
+    lotterySessions[chatId] = { stage: "waitingForCount", participants: [] };
+  } 
+  else if (lotterySessions[chatId]?.stage === "waitingForCount") {
+    const count = parseInt(text, 10);
+    if (!count || count <= 0) {
+      return await sendMessage(chatId, "Please enter a valid number.");
+    }
+    lotterySessions[chatId].count = count;
+    lotterySessions[chatId].stage = "waitingForNames";
+    lotterySessions[chatId].collected = 0;
+    await sendMessage(chatId, `Please enter the names of ${count} participants, one by one.`);
+  } 
+  else if (lotterySessions[chatId]?.stage === "waitingForNames") {
+    lotterySessions[chatId].participants.push(text);
+    lotterySessions[chatId].collected++;
+
+    if (lotterySessions[chatId].collected < lotterySessions[chatId].count) {
+      await sendMessage(chatId, `Added! ${lotterySessions[chatId].count - lotterySessions[chatId].collected} more to go.`);
+    } else {
+      lotterySessions[chatId].stage = "readyToStart";
+      await sendMessage(chatId, `All names collected! Type /startLottery to pick a winner.`);
+    }
+  } 
+  else if (text.startsWith("/startLottery") && lotterySessions[chatId]?.stage === "readyToStart") {
+    const participants = lotterySessions[chatId].participants;
+    const winner = participants[Math.floor(Math.random() * participants.length)];
+    
+    delete lotterySessions[chatId]; // Clear session
+
+    await sendMessage(chatId, `The winner is: ||${winner}||`, { parse_mode: "MarkdownV2" }); // Telegram spoiler format
+  }
+
+  res.status(200).send("OK");
 }

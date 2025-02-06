@@ -14,7 +14,7 @@ export default async function handler(req, res) {
 
   const message = req.body.message;
   const chatId = message.chat.id;
-  const text = message.text?.toLowerCase();
+  const text = message.text?.trim(); // Remove leading/trailing spaces
 
   if (!text) return res.status(200).send("No text found in the message.");
 
@@ -45,11 +45,18 @@ export default async function handler(req, res) {
   } 
   else if (text.startsWith("/startLottery") && lotterySessions[chatId]?.stage === "readyToStart") {
     const participants = lotterySessions[chatId].participants;
-    const winner = participants[Math.floor(Math.random() * participants.length)];
     
+    if (participants.length === 0) {
+      return await sendMessage(chatId, "No participants found. Please restart with /lottery.");
+    }
+
+    const winner = participants[Math.floor(Math.random() * participants.length)];
     delete lotterySessions[chatId]; // Clear session
 
-    await sendMessage(chatId, `The winner is: ||${winner}||`, { parse_mode: "MarkdownV2" }); // Telegram spoiler format
+    // Use Telegram's MarkdownV2 for spoiler formatting
+    const spoilerMessage = `The winner is: ||${winner}||`;
+
+    await sendMessage(chatId, spoilerMessage, { parse_mode: "MarkdownV2" });
   }
 
   res.status(200).send("OK");
